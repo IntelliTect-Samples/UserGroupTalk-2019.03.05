@@ -11,6 +11,7 @@ using UserGroupSite.Domain.Models;
 
 namespace UserGroupSite.Api.Controllers
 {
+    [ApiController]
     [Route("api/[controller]")]
     public class EventsController : ControllerBase
     {
@@ -23,7 +24,7 @@ namespace UserGroupSite.Api.Controllers
         }
         // GET: api/<controller>
         [HttpGet]
-        public async Task<IActionResult> Get()
+        public async Task<ActionResult<EventViewModel>> Get()
         {
             var events = await DbContext.Events.ToListAsync();
             return Ok(events.Select(e => Mapper.Map<EventViewModel>(e)));
@@ -31,7 +32,7 @@ namespace UserGroupSite.Api.Controllers
 
         // GET api/<controller>/5
         [HttpGet("{id}")]
-        public async Task<IActionResult> Get(int id)
+        public async Task<ActionResult<EventViewModel>> Get(int id)
         {
             var fetchedEvent = await DbContext.Events
                 .Include(e => e.Location)
@@ -49,19 +50,22 @@ namespace UserGroupSite.Api.Controllers
 
         // POST api/<controller>
         [HttpPost]
-        public async Task<IActionResult> Post([FromBody]EventInputViewModel viewModel)
+        public async Task<ActionResult<EventViewModel>> Post(EventInputViewModel viewModel)
         {
             var eventToAdd = Mapper.Map<Event>(viewModel);
 
             DbContext.Events.Add(eventToAdd);
             await DbContext.SaveChangesAsync();
 
-            return Ok(Mapper.Map<EventViewModel>(eventToAdd));
+            //return Ok(Mapper.Map<EventViewModel>(eventToAdd));
+            return CreatedAtAction(nameof(Get),
+                new { id = eventToAdd.Id },
+                Mapper.Map<EventViewModel>(eventToAdd));
         }
 
         // PUT api/<controller>/5
         [HttpPut("{id}")]
-        public IActionResult Put(int id, [FromBody]string value)
+        public IActionResult Put(int id, EventInputViewModel viewModel)
         {
             return Ok();
         }

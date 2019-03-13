@@ -1,10 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.NetworkInformation;
 using System.Reflection;
 using System.Threading.Tasks;
 using AutoMapper;
+using HealthChecks.UI.Client;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -12,9 +15,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyModel;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Newtonsoft.Json;
 using Swashbuckle.AspNetCore.Swagger;
 using UserGroupSite.Domain.Models;
+
+[assembly:ApiConventionType(typeof(DefaultApiConventions))]
 
 namespace UserGroupSite.Api
 {
@@ -29,6 +35,7 @@ namespace UserGroupSite.Api
         // For more information on how to configure your application, visit https://go.microsoft.com/fwlink/?LinkID=398940
         public void ConfigureServices(IServiceCollection services)
         {
+            var connectionString = Configuration.GetConnectionString("DefaultConnection");
             services.AddDbContext<ApplicationDbContext>(config =>
             {
                 config.UseSqlServer(Configuration.GetConnectionString("DefaultConnection"));
@@ -51,6 +58,20 @@ namespace UserGroupSite.Api
                 lib.GetDefaultAssemblyNames(dependencyContext)
                     .Where(a => a.Name.Contains("UserGroupSite")).Select(Assembly.Load)).ToArray();
             services.AddAutoMapper(assemblies);
+
+            services.AddHealthChecks()
+                .AddSqlServer(connectionString)
+                .AddAsyncCheck("PingBing", async () =>
+                {
+                    using (var ping = new Ping())
+                    {
+                        var result = await ping.SendPingAsync("bing.com", 5000);
+                        return new HealthCheckResult(
+                            result.Status == IPStatus.Success ?
+                                result.RoundtripTime < 10 ? HealthStatus.Healthy : HealthStatus.Degraded
+                            : HealthStatus.Unhealthy);
+                    }
+                });
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -67,6 +88,12 @@ namespace UserGroupSite.Api
             }
 
             app.UseHttpsRedirection();
+
+            app.UseHealthChecks("/healthchecks-api", new HealthCheckOptions
+            {
+                Predicate = _ => true,
+                ResponseWriter = UIResponseWriter.WriteHealthCheckUIResponse
+            });
 
             // Enable middleware to serve generated Swagger as a JSON endpoint.
             app.UseSwagger();
